@@ -14,6 +14,7 @@ from selenium.webdriver.support.expected_conditions import presence_of_element_l
 from dtos import V1RequestBase, V1ResponseBase, ChallengeResolutionT, ChallengeResolutionResultT, IndexResponse, \
     HealthResponse, STATUS_OK, STATUS_ERROR
 import utils
+import captcha
 
 ACCESS_DENIED_TITLES = [
     # Cloudflare
@@ -41,6 +42,7 @@ CHALLENGE_SELECTORS = [
     # fairlane
     'div.vc div.text-box h2'
 ]
+CAPTCHA_SELECTORS = captcha.solvers_by_css_selector.keys()
 SHORT_TIMEOUT = 10
 
 
@@ -308,6 +310,17 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
     else:
         logging.info("Challenge not detected!")
         res.message = "Challenge not detected!"
+
+    # captcha selector to interact with
+    for selector in CAPTCHA_SELECTORS:
+        found_elements = driver.find_elements(By.CSS_SELECTOR, selector)
+        if len(found_elements) > 0:
+            logging.info("Challenge detected. Selector found: " + selector)
+            solver = captcha.get_solver(selector)
+            solver(driver, selector)
+            # TODO: wait for the page to load
+            WebDriverWait(driver, SHORT_TIMEOUT).until_not(
+                presence_of_element_located((By.CSS_SELECTOR, selector)))
 
     challenge_res = ChallengeResolutionResultT({})
     challenge_res.url = driver.current_url
