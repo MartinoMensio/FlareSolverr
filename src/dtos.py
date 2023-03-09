@@ -31,7 +31,7 @@ class V1RequestBase(object):
     cmd: str = None
     cookies: list = None
     maxTimeout: int = None
-    proxy: dict = None
+    proxy: str = None
     session: str = None
     headers: list = None  # deprecated v2.0.0, not used
     userAgent: str = None  # deprecated v2.0.0, not used
