@@ -3,11 +3,12 @@ import logging
 import os
 import sys
 
-from bottle import run, response, Bottle, request
+import certifi
+from bottle import run, response, Bottle, request, ServerAdapter
 
 from bottle_plugins.error_plugin import error_plugin
 from bottle_plugins.logger_plugin import logger_plugin
-from dtos import IndexResponse, V1RequestBase
+from dtos import V1RequestBase
 import flaresolverr_service
 import utils
 
@@ -60,6 +61,12 @@ def controller_v1():
 
 
 if __name__ == "__main__":
+    # fix ssl certificates for compiled binaries
+    # https://github.com/pyinstaller/pyinstaller/issues/7229
+    # https://stackoverflow.com/questions/55736855/how-to-change-the-cafile-argument-in-the-ssl-module-in-python3
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+
     # validate configuration
     log_level = os.environ.get('LOG_LEVEL', 'info').upper()
     log_html = utils.get_config_log_html()
@@ -92,4 +99,10 @@ if __name__ == "__main__":
 
     # start webserver
     # default server 'wsgiref' does not support concurrent requests
-    run(app, host=server_host, port=server_port, quiet=True, server='waitress')
+    # https://github.com/FlareSolverr/FlareSolverr/issues/680
+    # https://github.com/Pylons/waitress/issues/31
+    class WaitressServerPoll(ServerAdapter):
+        def run(self, handler):
+            from waitress import serve
+            serve(handler, host=self.host, port=self.port, asyncore_use_poll=True)
+    run(app, host=server_host, port=server_port, quiet=True, server=WaitressServerPoll)

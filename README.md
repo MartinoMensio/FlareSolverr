@@ -64,13 +64,14 @@ Remember to restart the Docker daemon and the container after the update.
 
 ### Precompiled binaries
 
-Precompiled binaries are not currently available for v3. Please see https://github.com/FlareSolverr/FlareSolverr/issues/660 for updates,
-or below for instructions of how to build FlareSolverr from source code.
+This is the recommended way for Windows users.
+* Download the [FlareSolverr executable](https://github.com/FlareSolverr/FlareSolverr/releases) from the release's page. It is available for Windows x64 and Linux x64.
+* Execute FlareSolverr binary. In the environment variables section you can find how to change the configuration.
 
 ### From source code
 
-* Install [Python 3.10](https://www.python.org/downloads/).
-* Install [Chrome](https://www.google.com/intl/en_us/chrome/) or [Chromium](https://www.chromium.org/getting-involved/download-chromium/) web browser.
+* Install [Python 3.11](https://www.python.org/downloads/).
+* Install [Chrome](https://www.google.com/intl/en_us/chrome/) (all OS) or [Chromium](https://www.chromium.org/getting-involved/download-chromium/) (just Linux, it doesn't work in Windows) web browser.
 * (Only in Linux / macOS) Install [Xvfb](https://en.wikipedia.org/wiki/Xvfb) package.
 * Clone this repository and open a shell in that path.
 * Run `pip install -r requirements.txt` command to install FlareSolverr dependencies.
@@ -137,14 +138,15 @@ session. When you no longer need to use a session you should make sure to close 
 
 #### + `request.get`
 
-| Parameter         | Notes                                                                                                                                                                                                                                                                                                                                        |
-|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| url               | Mandatory                                                                                                                                                                                                                                                                                                                                    |
-| session           | Optional. Will send the request from and existing browser instance. If one is not sent it will create a temporary instance that will be destroyed immediately after the request is completed.                                                                                                                                                |
-| maxTimeout        | Optional, default value 60000. Max timeout to solve the challenge in milliseconds.                                                                                                                                                                                                                                                           |
-| cookies           | Optional. Will be used by the headless browser. Follow [this](https://github.com/puppeteer/puppeteer/blob/v3.3.0/docs/api.md#pagesetcookiecookies) format.                                                                                                                                                                                   |
-| returnOnlyCookies | Optional, default false. Only returns the cookies. Response data, headers and other parts of the response are removed.                                                                                                                                                                                                                       |
-| proxy             | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is not supported. (When the `session` parameter is set, the proxy is ignored; a session specific proxy can be set in `sessions.create`.) |
+| Parameter           | Notes                                                                                                                                                                                                                                                                                                                                        |
+|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| url                 | Mandatory                                                                                                                                                                                                                                                                                                                                    |
+| session             | Optional. Will send the request from and existing browser instance. If one is not sent it will create a temporary instance that will be destroyed immediately after the request is completed.                                                                                                                                                |
+| session_ttl_minutes | Optional. FlareSolverr will automatically rotate expired sessions based on the TTL provided in minutes.                                                                                                                                                                                                                                      |
+| maxTimeout          | Optional, default value 60000. Max timeout to solve the challenge in milliseconds.                                                                                                                                                                                                                                                           |
+| cookies             | Optional. Will be used by the headless browser. Follow [this](https://github.com/puppeteer/puppeteer/blob/v3.3.0/docs/api.md#pagesetcookiecookies) format.                                                                                                                                                                                   |
+| returnOnlyCookies   | Optional, default false. Only returns the cookies. Response data, headers and other parts of the response are removed.                                                                                                                                                                                                                       |
+| proxy               | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is not supported. (When the `session` parameter is set, the proxy is ignored; a session specific proxy can be set in `sessions.create`.) |
 
 :warning: If you want to use Cloudflare clearance cookie in your scripts, make sure you use the FlareSolverr User-Agent too. If they don't match you will see the challenge.
 

@@ -1,19 +1,24 @@
 import logging
+import platform
 import sys
 import time
+from datetime import timedelta
 from urllib.parse import unquote
 
-from func_timeout import func_timeout, FunctionTimedOut
+from func_timeout import FunctionTimedOut, func_timeout
 from selenium.common import TimeoutException
 from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.expected_conditions import (
+    presence_of_element_located, staleness_of, title_is)
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support.expected_conditions import presence_of_element_located, staleness_of, title_is
 
-from dtos import V1RequestBase, V1ResponseBase, ChallengeResolutionT, ChallengeResolutionResultT, IndexResponse, \
-    HealthResponse, STATUS_OK, STATUS_ERROR
 import utils
+from dtos import (STATUS_ERROR, STATUS_OK, ChallengeResolutionResultT,
+                  ChallengeResolutionT, HealthResponse, IndexResponse,
+                  V1RequestBase, V1ResponseBase)
+from sessions import SessionsStorage
 import captcha
 
 ACCESS_DENIED_TITLES = [
@@ -32,22 +37,22 @@ CHALLENGE_TITLES = [
     # Cloudflare
     'Just a moment...',
     # DDoS-GUARD
-    'DDOS-GUARD',
+    'DDoS-Guard'
 ]
 CHALLENGE_SELECTORS = [
     # Cloudflare
     '#cf-challenge-running', '.ray_id', '.attack-box', '#cf-please-wait', '#challenge-spinner', '#trk_jschal_js',
     # Custom CloudFlare for EbookParadijs, Film-Paleis, MuziekFabriek and Puur-Hollands
-    'td.info #js_info',
-    # fairlane
-    'div.vc div.text-box h2'
+    'td.info #js_info'
 ]
 CAPTCHA_SELECTORS = captcha.solvers_by_css_selector.keys()
 SHORT_TIMEOUT = 10
+SESSIONS_STORAGE = SessionsStorage()
 
 
 def test_browser_installation():
     logging.info("Testing web browser installation...")
+    logging.info("Platform: " + platform.platform())
 
     chrome_exe_path = utils.get_chrome_exe_path()
     if chrome_exe_path is None:
@@ -63,9 +68,10 @@ def test_browser_installation():
     else:
         logging.info("Chrome / Chromium major version: " + chrome_major_version)
 
+    logging.info("Launching web browser...")
     user_agent = utils.get_user_agent()
     logging.info("FlareSolverr User-Agent: " + user_agent)
-    logging.info("Test successful")
+    logging.info("Test successful!")
 
 
 def index_endpoint() -> IndexResponse:
@@ -119,11 +125,11 @@ def _controller_v1_handler(req: V1RequestBase) -> V1ResponseBase:
     # execute the command
     res: V1ResponseBase
     if req.cmd == 'sessions.create':
-        raise Exception("Not implemented yet.")
+        res = _cmd_sessions_create(req)
     elif req.cmd == 'sessions.list':
-        raise Exception("Not implemented yet.")
+        res = _cmd_sessions_list(req)
     elif req.cmd == 'sessions.destroy':
-        raise Exception("Not implemented yet.")
+        res = _cmd_sessions_destroy(req)
     elif req.cmd == 'request.get':
         res = _cmd_request_get(req)
     elif req.cmd == 'request.post':
@@ -170,19 +176,77 @@ def _cmd_request_post(req: V1RequestBase) -> V1ResponseBase:
     return res
 
 
+def _cmd_sessions_create(req: V1RequestBase) -> V1ResponseBase:
+    logging.debug("Creating new session...")
+
+    session, fresh = SESSIONS_STORAGE.create(session_id=req.session)
+    session_id = session.session_id
+
+    if not fresh:
+        return V1ResponseBase({
+            "status": STATUS_OK,
+            "message": "Session already exists.",
+            "session": session_id
+        })
+
+    return V1ResponseBase({
+        "status": STATUS_OK,
+        "message": "Session created successfully.",
+        "session": session_id
+    })
+
+
+def _cmd_sessions_list(req: V1RequestBase) -> V1ResponseBase:
+    session_ids = SESSIONS_STORAGE.session_ids()
+
+    return V1ResponseBase({
+        "status": STATUS_OK,
+        "message": "",
+        "sessions": session_ids
+    })
+
+
+def _cmd_sessions_destroy(req: V1RequestBase) -> V1ResponseBase:
+    session_id = req.session
+    existed = SESSIONS_STORAGE.destroy(session_id)
+
+    if not existed:
+        raise Exception("The session doesn't exist.")
+
+    return V1ResponseBase({
+        "status": STATUS_OK,
+        "message": "The session has been removed."
+    })
+
+
 def _resolve_challenge(req: V1RequestBase, method: str) -> ChallengeResolutionT:
     timeout = req.maxTimeout / 1000
     driver = None
     try:
-        driver = utils.get_webdriver()
+        if req.session:
+            session_id = req.session
+            ttl = timedelta(minutes=req.session_ttl_minutes) if req.session_ttl_minutes else None
+            session, fresh = SESSIONS_STORAGE.get(session_id, ttl)
+
+            if fresh:
+                logging.debug(f"new session created to perform the request (session_id={session_id})")
+            else:
+                logging.debug(f"existing session is used to perform the request (session_id={session_id}, "
+                              f"lifetime={str(session.lifetime())}, ttl={str(ttl)})")
+
+            driver = session.driver
+        else:
+            driver = utils.get_webdriver()
+            logging.debug('New instance of webdriver has been created to perform the request')
         return func_timeout(timeout, _evil_logic, (req, driver, method))
     except FunctionTimedOut:
         raise Exception(f'Error solving the challenge. Timeout after {timeout} seconds.')
     except Exception as e:
         raise Exception('Error solving the challenge. ' + str(e))
     finally:
-        if driver is not None:
+        if not req.session and driver is not None:
             driver.quit()
+            logging.debug('A used instance of webdriver has been destroyed')
 
 
 def click_verify(driver: WebDriver):
@@ -200,9 +264,8 @@ def click_verify(driver: WebDriver):
             actions.click(checkbox)
             actions.perform()
             logging.debug("Cloudflare verify checkbox found and clicked")
-    except Exception as e:
+    except Exception:
         logging.debug("Cloudflare verify checkbox not found on the page")
-        # print(e)
     finally:
         driver.switch_to.default_content()
 
@@ -223,6 +286,7 @@ def click_verify(driver: WebDriver):
         # print(e)
 
     time.sleep(2)
+
 
 def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> ChallengeResolutionT:
     res = ChallengeResolutionT({})
@@ -257,9 +321,9 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
     # find challenge by title
     challenge_found = False
     for title in CHALLENGE_TITLES:
-        if title == page_title:
+        if title.lower() == page_title.lower():
             challenge_found = True
-            logging.info("Challenge detected. Title found: " + title)
+            logging.info("Challenge detected. Title found: " + page_title)
             break
     if not challenge_found:
         # find challenge by selectors

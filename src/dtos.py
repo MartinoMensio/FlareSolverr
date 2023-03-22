@@ -33,6 +33,7 @@ class V1RequestBase(object):
     maxTimeout: int = None
     proxy: dict = None
     session: str = None
+    session_ttl_minutes: int = None
     headers: list = None  # deprecated v2.0.0, not used
     userAgent: str = None  # deprecated v2.0.0, not used
 
@@ -51,6 +52,8 @@ class V1ResponseBase(object):
     # V1ResponseBase
     status: str = None
     message: str = None
+    session: str = None
+    sessions: list[str] = None
     startTimestamp: int = None
     endTimestamp: int = None
     version: str = None
