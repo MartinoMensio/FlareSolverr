@@ -379,7 +379,7 @@ def _evil_logic(req: V1RequestBase, driver: WebDriver, method: str) -> Challenge
     for selector in CAPTCHA_SELECTORS:
         found_elements = driver.find_elements(By.CSS_SELECTOR, selector)
         if len(found_elements) > 0:
-            logging.info("Challenge detected. Selector found: " + selector)
+            logging.info("CAPTCHA detected. Selector found: " + selector)
             solver = captcha.get_solver(selector)
             solver(driver, selector)
             # TODO: wait for the page to load
