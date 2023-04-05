@@ -1,5 +1,18 @@
 # Changelog
 
+## v3.1.2 (2023/04/02)
+
+* Fix headless mode in macOS
+* Remove redundant artifact from Windows binary package
+* Bump Selenium dependency
+
+## v3.1.1 (2023/03/25)
+
+* Distribute binary executables in compressed package
+* Add icon for binary executable
+* Include information about supported architectures in the readme
+* Check Python version on start
+
 ## v3.1.0 (2023/03/20)
 
 * Build binaries for Linux x64 and Windows x64
