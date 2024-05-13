@@ -8,6 +8,7 @@ from bottle import run, response, Bottle, request, ServerAdapter
 
 from bottle_plugins.error_plugin import error_plugin
 from bottle_plugins.logger_plugin import logger_plugin
+from bottle_plugins import prometheus_plugin
 from dtos import V1RequestBase
 import flaresolverr_service
 import utils
@@ -23,10 +24,6 @@ class JSONErrorBottle(Bottle):
 
 
 app = JSONErrorBottle()
-
-# plugin order is important
-app.install(logger_plugin)
-app.install(error_plugin)
 
 
 @app.route('/')
@@ -65,6 +62,12 @@ if __name__ == "__main__":
     if sys.version_info < (3, 9):
         raise Exception("The Python version is less than 3.9, a version equal to or higher is required.")
 
+    # fix for HEADLESS=false in Windows binary
+    # https://stackoverflow.com/a/27694505
+    if os.name == 'nt':
+        import multiprocessing
+        multiprocessing.freeze_support()
+
     # fix ssl certificates for compiled binaries
     # https://github.com/pyinstaller/pyinstaller/issues/7229
     # https://stackoverflow.com/questions/55736855/how-to-change-the-cafile-argument-in-the-ssl-module-in-python3
@@ -100,6 +103,13 @@ if __name__ == "__main__":
 
     # test browser installation
     flaresolverr_service.test_browser_installation()
+
+    # start bootle plugins
+    # plugin order is important
+    app.install(logger_plugin)
+    app.install(error_plugin)
+    prometheus_plugin.setup()
+    app.install(prometheus_plugin.prometheus_plugin)
 
     # start webserver
     # default server 'wsgiref' does not support concurrent requests

@@ -3,6 +3,9 @@ import logging
 import os
 import re
 import shutil
+import urllib.parse
+import tempfile
+import sys
 
 from selenium.webdriver.chrome.webdriver import WebDriver
 import undetected_chromedriver as uc
@@ -36,8 +39,82 @@ def get_flaresolverr_version() -> str:
         return FLARESOLVERR_VERSION
 
 
-def get_webdriver() -> WebDriver:
-    global PATCHED_DRIVER_PATH
+def create_proxy_extension(proxy: dict) -> str:
+    parsed_url = urllib.parse.urlparse(proxy['url'])
+    scheme = parsed_url.scheme
+    host = parsed_url.hostname
+    port = parsed_url.port
+    username = proxy['username']
+    password = proxy['password']
+    manifest_json = """
+    {
+        "version": "1.0.0",
+        "manifest_version": 2,
+        "name": "Chrome Proxy",
+        "permissions": [
+            "proxy",
+            "tabs",
+            "unlimitedStorage",
+            "storage",
+            "<all_urls>",
+            "webRequest",
+            "webRequestBlocking"
+        ],
+        "background": {"scripts": ["background.js"]},
+        "minimum_chrome_version": "76.0.0"
+    }
+    """
+
+    background_js = """
+    var config = {
+        mode: "fixed_servers",
+        rules: {
+            singleProxy: {
+                scheme: "%s",
+                host: "%s",
+                port: %d
+            },
+            bypassList: ["localhost"]
+        }
+    };
+
+    chrome.proxy.settings.set({value: config, scope: "regular"}, function() {});
+
+    function callbackFn(details) {
+        return {
+            authCredentials: {
+                username: "%s",
+                password: "%s"
+            }
+        };
+    }
+
+    chrome.webRequest.onAuthRequired.addListener(
+        callbackFn,
+        { urls: ["<all_urls>"] },
+        ['blocking']
+    );
+    """ % (
+        scheme,
+        host,
+        port,
+        username,
+        password
+    )
+
+    proxy_extension_dir = tempfile.mkdtemp()
+
+    with open(os.path.join(proxy_extension_dir, "manifest.json"), "w") as f:
+        f.write(manifest_json)
+
+    with open(os.path.join(proxy_extension_dir, "background.js"), "w") as f:
+        f.write(background_js)
+
+    return proxy_extension_dir
+
+
+def get_webdriver(proxy: dict = None) -> WebDriver:
+    global PATCHED_DRIVER_PATH, USER_AGENT
     logging.debug('Launching web browser...')
 
     # undetected_chromedriver
@@ -54,8 +131,30 @@ def get_webdriver() -> WebDriver:
     options.add_argument('--disable-software-rasterizer')
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--ignore-ssl-errors')
+    # fix GL errors in ASUSTOR NAS
+    # https://github.com/FlareSolverr/FlareSolverr/issues/782
+    # https://github.com/microsoft/vscode/issues/127800#issuecomment-873342069
+    # https://peter.sh/experiments/chromium-command-line-switches/#use-gl
+    options.add_argument('--use-gl=swiftshader')
 
-    # note: headless mode is detected (options.headless = True)
+    language = os.environ.get('LANG', None)
+    if language is not None:
+        options.add_argument('--accept-lang=%s' % language)
+
+    # Fix for Chrome 117 | https://github.com/FlareSolverr/FlareSolverr/issues/910
+    if USER_AGENT is not None:
+        options.add_argument('--user-agent=%s' % USER_AGENT)
+
+    proxy_extension_dir = None
+    if proxy and all(key in proxy for key in ['url', 'username', 'password']):
+        proxy_extension_dir = create_proxy_extension(proxy)
+        options.add_argument("--load-extension=%s" % os.path.abspath(proxy_extension_dir))
+    elif proxy and 'url' in proxy:
+        proxy_url = proxy['url']
+        logging.debug("Using webdriver proxy: %s", proxy_url)
+        options.add_argument('--proxy-server=%s' % proxy_url)
+
+    # note: headless mode is detected (headless = True)
     # we launch the browser in head-full mode with the window hidden
     windows_headless = False
     if get_config_headless():
@@ -63,6 +162,10 @@ def get_webdriver() -> WebDriver:
             windows_headless = True
         else:
             start_xvfb_display()
+    # For normal headless mode:
+    # options.add_argument('--headless')
+
+    options.add_argument("--auto-open-devtools-for-tabs")
 
     # if we are inside the Docker container, we avoid downloading the driver
     driver_exe_path = None
@@ -80,14 +183,22 @@ def get_webdriver() -> WebDriver:
 
     # downloads and patches the chromedriver
     # if we don't set driver_executable_path it downloads, patches, and deletes the driver each time
-    driver = uc.Chrome(options=options, browser_executable_path=browser_executable_path,
-                       driver_executable_path=driver_exe_path, version_main=version_main,
-                       windows_headless=windows_headless)
+    try:
+        driver = uc.Chrome(options=options, browser_executable_path=browser_executable_path,
+                           driver_executable_path=driver_exe_path, version_main=version_main,
+                           windows_headless=windows_headless, headless=get_config_headless())
+    except Exception as e:
+        logging.error("Error starting Chrome: %s" % e)
 
     # save the patched driver to avoid re-downloads
     if driver_exe_path is None:
         PATCHED_DRIVER_PATH = os.path.join(driver.patcher.data_path, driver.patcher.exe_name)
-        shutil.copy(driver.patcher.executable_path, PATCHED_DRIVER_PATH)
+        if PATCHED_DRIVER_PATH != driver.patcher.executable_path:
+            shutil.copy(driver.patcher.executable_path, PATCHED_DRIVER_PATH)
+
+    # clean up proxy extension directory
+    if proxy_extension_dir is not None:
+        shutil.rmtree(proxy_extension_dir)
 
     # selenium vanilla
     # options = webdriver.ChromeOptions()
@@ -106,12 +217,15 @@ def get_chrome_exe_path() -> str:
         return CHROME_EXE_PATH
     # linux pyinstaller bundle
     chrome_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chrome', "chrome")
-    if os.path.exists(chrome_path) and os.access(chrome_path, os.X_OK):
+    if os.path.exists(chrome_path):
+        if not os.access(chrome_path, os.X_OK):
+            raise Exception(f'Chrome binary "{chrome_path}" is not executable. '
+                            f'Please, extract the archive with "tar xzf <file.tar.gz>".')
         CHROME_EXE_PATH = chrome_path
         return CHROME_EXE_PATH
     # windows pyinstaller bundle
     chrome_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chrome', "chrome.exe")
-    if os.path.exists(chrome_path) and os.access(chrome_path, os.X_OK):
+    if os.path.exists(chrome_path):
         CHROME_EXE_PATH = chrome_path
         return CHROME_EXE_PATH
     # system
@@ -193,6 +307,8 @@ def get_user_agent(driver=None) -> str:
         if driver is None:
             driver = get_webdriver()
         USER_AGENT = driver.execute_script("return navigator.userAgent")
+        # Fix for Chrome 117 | https://github.com/FlareSolverr/FlareSolverr/issues/910
+        USER_AGENT = re.sub('HEADLESS', '', USER_AGENT, flags=re.IGNORECASE)
         return USER_AGENT
     except Exception as e:
         raise Exception("Error getting browser User-Agent. " + str(e))

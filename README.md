@@ -45,7 +45,8 @@ Supported architectures are:
 | ARM32        | linux/arm/v7 |
 | ARM64        | linux/arm64  |
 
-We provide a `docker-compose.yml` configuration file. Clone this repository and execute `docker-compose up -d` to start
+We provide a `docker-compose.yml` configuration file. Clone this repository and execute
+`docker-compose up -d` _(Compose V1)_ or `docker compose up -d` _(Compose V2)_ to start
 the container.
 
 If you prefer the `docker cli` execute the following command.
@@ -78,10 +79,18 @@ This is the recommended way for Windows users.
 
 * Install [Python 3.11](https://www.python.org/downloads/).
 * Install [Chrome](https://www.google.com/intl/en_us/chrome/) (all OS) or [Chromium](https://www.chromium.org/getting-involved/download-chromium/) (just Linux, it doesn't work in Windows) web browser.
-* (Only in Linux / macOS) Install [Xvfb](https://en.wikipedia.org/wiki/Xvfb) package.
+* (Only in Linux) Install [Xvfb](https://en.wikipedia.org/wiki/Xvfb) package.
+* (Only in macOS) Install [XQuartz](https://www.xquartz.org/) package.
 * Clone this repository and open a shell in that path.
 * Run `pip install -r requirements.txt` command to install FlareSolverr dependencies.
 * Run `python src/flaresolverr.py` command to start FlareSolverr.
+
+### From source code (FreeBSD/TrueNAS CORE)
+
+* Run `pkg install chromium python39 py39-pip xorg-vfbserver` command to install the required dependencies.
+* Clone this repository and open a shell in that path.
+* Run `python3.9 -m pip install -r requirements.txt` command to install FlareSolverr dependencies.
+* Run `python3.9 src/flaresolverr.py` command to start FlareSolverr.
 
 ### Systemd service
 
@@ -89,15 +98,41 @@ We provide an example Systemd unit file `flaresolverr.service` as reference. You
 
 ## Usage
 
-Example request:
+Example Bash request:
 ```bash
 curl -L -X POST 'http://localhost:8191/v1' \
 -H 'Content-Type: application/json' \
 --data-raw '{
   "cmd": "request.get",
-  "url":"http://www.google.com/",
+  "url": "http://www.google.com/",
   "maxTimeout": 60000
 }'
+```
+
+Example Python request:
+```py
+import requests
+
+url = "http://localhost:8191/v1"
+headers = {"Content-Type": "application/json"}
+data = {
+    "cmd": "request.get",
+    "url": "http://www.google.com/",
+    "maxTimeout": 60000
+}
+response = requests.post(url, headers=headers, json=data)
+print(response.text)
+```
+
+Example PowerShell request:
+```ps1
+$body = @{
+    cmd = "request.get"
+    url = "http://www.google.com/"
+    maxTimeout = 60000
+} | ConvertTo-Json
+
+irm -UseBasicParsing 'http://localhost:8191/v1' -Headers @{"Content-Type"="application/json"} -Method Post -Body $body
 ```
 
 ### Commands
@@ -110,10 +145,10 @@ cookies for the browser to use.
 
 This also speeds up the requests since it won't have to launch a new browser instance for every request.
 
-| Parameter | Notes                                                                                                                                                                                                                 |
-|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| session   | Optional. The session ID that you want to be assigned to the instance. If isn't set a random UUID will be assigned.                                                                                                   |
-| proxy     | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is not supported. |
+| Parameter | Notes                                                                                                                                                                                                                                                                                                            |
+|-----------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| session   | Optional. The session ID that you want to be assigned to the instance. If isn't set a random UUID will be assigned.                                                                                                                                                                                              |
+| proxy     | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is supported. Eg: `"proxy": {"url": "http://127.0.0.1:8888", "username": "testuser", "password": "testpass"}` |
 
 #### + `sessions.list`
 
@@ -150,7 +185,7 @@ session. When you no longer need to use a session you should make sure to close 
 | session             | Optional. Will send the request from and existing browser instance. If one is not sent it will create a temporary instance that will be destroyed immediately after the request is completed.                                                                                                                                                |
 | session_ttl_minutes | Optional. FlareSolverr will automatically rotate expired sessions based on the TTL provided in minutes.                                                                                                                                                                                                                                      |
 | maxTimeout          | Optional, default value 60000. Max timeout to solve the challenge in milliseconds.                                                                                                                                                                                                                                                           |
-| cookies             | Optional. Will be used by the headless browser. Follow [this](https://github.com/puppeteer/puppeteer/blob/v3.3.0/docs/api.md#pagesetcookiecookies) format.                                                                                                                                                                                   |
+| cookies             | Optional. Will be used by the headless browser. Eg: `"cookies": [{"name": "cookie1", "value": "value1"}, {"name": "cookie2", "value": "value2"}]`.                                                                                                                                                                                           |
 | returnOnlyCookies   | Optional, default false. Only returns the cookies. Response data, headers and other parts of the response are removed.                                                                                                                                                                                                                       |
 | proxy               | Optional, default disabled. Eg: `"proxy": {"url": "http://127.0.0.1:8888"}`. You must include the proxy schema in the URL: `http://`, `socks4://` or `socks5://`. Authorization (username/password) is not supported. (When the `session` parameter is set, the proxy is ignored; a session specific proxy can be set in `sessions.create`.) |
 
@@ -226,22 +261,51 @@ This is the same as `request.get` but it takes one more param:
 
 ## Environment variables
 
-| Name            | Default                | Notes                                                                                                                                                         |
-|-----------------|------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| LOG_LEVEL       | info                   | Verbosity of the logging. Use `LOG_LEVEL=debug` for more information.                                                                                         |
-| LOG_HTML        | false                  | Only for debugging. If `true` all HTML that passes through the proxy will be logged to the console in `debug` level.                                          |
-| CAPTCHA_SOLVER  | none                   | Captcha solving method. It is used when a captcha is encountered. See the Captcha Solvers section.                                                            |
-| TZ              | UTC                    | Timezone used in the logs and the web browser. Example: `TZ=Europe/London`.                                                                                   |
-| HEADLESS        | true                   | Only for debugging. To run the web browser in headless mode or visible.                                                                                       |
-| BROWSER_TIMEOUT | 40000                  | If you are experiencing errors/timeouts because your system is slow, you can try to increase this value. Remember to increase the `maxTimeout` parameter too. |
-| TEST_URL        | https://www.google.com | FlareSolverr makes a request on start to make sure the web browser is working. You can change that URL if it is blocked in your country.                      |
-| PORT            | 8191                   | Listening port. You don't need to change this if you are running on Docker.                                                                                   |
-| HOST            | 0.0.0.0                | Listening interface. You don't need to change this if you are running on Docker.                                                                              |
+| Name               | Default                | Notes                                                                                                                                                         |
+|--------------------|------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| LOG_LEVEL          | info                   | Verbosity of the logging. Use `LOG_LEVEL=debug` for more information.                                                                                         |
+| LOG_HTML           | false                  | Only for debugging. If `true` all HTML that passes through the proxy will be logged to the console in `debug` level.                                          |
+| CAPTCHA_SOLVER     | none                   | Captcha solving method. It is used when a captcha is encountered. See the Captcha Solvers section.                                                            |
+| TZ                 | UTC                    | Timezone used in the logs and the web browser. Example: `TZ=Europe/London`.                                                                                   |
+| LANG               | none                   | Language used in the web browser. Example: `LANG=en_GB`.                                                                                   |
+| HEADLESS           | true                   | Only for debugging. To run the web browser in headless mode or visible.                                                                                       |
+| BROWSER_TIMEOUT    | 40000                  | If you are experiencing errors/timeouts because your system is slow, you can try to increase this value. Remember to increase the `maxTimeout` parameter too. |
+| TEST_URL           | https://www.google.com | FlareSolverr makes a request on start to make sure the web browser is working. You can change that URL if it is blocked in your country.                      |
+| PORT               | 8191                   | Listening port. You don't need to change this if you are running on Docker.                                                                                   |
+| HOST               | 0.0.0.0                | Listening interface. You don't need to change this if you are running on Docker.                                                                              |
+| PROMETHEUS_ENABLED | false                  | Enable Prometheus exporter. See the Prometheus section below.                                                                                                 |
+| PROMETHEUS_PORT    | 8192                   | Listening port for Prometheus exporter. See the Prometheus section below.                                                                                     |
 
 Environment variables are set differently depending on the operating system. Some examples:
 * Docker: Take a look at the Docker section in this document. Environment variables can be set in the `docker-compose.yml` file or in the Docker CLI command.
-* Linux: Run `export LOG_LEVEL=debug` and then start FlareSolverr in the same shell.
-* Windows: Open `cmd.exe`, run `set LOG_LEVEL=debug` and then start FlareSolverr in the same shell.
+* Linux: Run `export LOG_LEVEL=debug` and then run `flaresolverr` in the same shell.
+* Windows: Open `cmd.exe`, run `set LOG_LEVEL=debug` and then run `flaresolverr.exe` in the same shell.
+
+## Prometheus exporter
+
+The Prometheus exporter for FlareSolverr is disabled by default. It can be enabled with the environment variable `PROMETHEUS_ENABLED`. If you are using Docker make sure you expose the `PROMETHEUS_PORT`.
+
+Example metrics:
+```shell
+# HELP flaresolverr_request_total Total requests with result
+# TYPE flaresolverr_request_total counter
+flaresolverr_request_total{domain="nowsecure.nl",result="solved"} 1.0
+# HELP flaresolverr_request_created Total requests with result
+# TYPE flaresolverr_request_created gauge
+flaresolverr_request_created{domain="nowsecure.nl",result="solved"} 1.690141657157109e+09
+# HELP flaresolverr_request_duration Request duration in seconds
+# TYPE flaresolverr_request_duration histogram
+flaresolverr_request_duration_bucket{domain="nowsecure.nl",le="0.0"} 0.0
+flaresolverr_request_duration_bucket{domain="nowsecure.nl",le="10.0"} 1.0
+flaresolverr_request_duration_bucket{domain="nowsecure.nl",le="25.0"} 1.0
+flaresolverr_request_duration_bucket{domain="nowsecure.nl",le="50.0"} 1.0
+flaresolverr_request_duration_bucket{domain="nowsecure.nl",le="+Inf"} 1.0
+flaresolverr_request_duration_count{domain="nowsecure.nl"} 1.0
+flaresolverr_request_duration_sum{domain="nowsecure.nl"} 5.858
+# HELP flaresolverr_request_duration_created Request duration in seconds
+# TYPE flaresolverr_request_duration_created gauge
+flaresolverr_request_duration_created{domain="nowsecure.nl"} 1.6901416571570296e+09
+```
 
 ## Captcha Solvers
 

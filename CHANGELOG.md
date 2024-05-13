@@ -1,5 +1,119 @@
 # Changelog
 
+## v3.3.17 (2024/04/09)
+
+* Fix file descriptor leak in service on quit(). Thanks @zkulis
+
+## v3.3.16 (2024/02/28)
+
+* Fix of the subprocess.STARTUPINFO() call. Thanks @ceconelo
+* Add FreeBSD support. Thanks @Asthowen
+* Use headless configuration properly. Thanks @hashworks
+
+## v3.3.15 (2024/02/20)
+
+* Fix looping challenges
+
+## v3.3.14-hotfix2 (2024/02/17)
+
+* Hotfix 2 - bad Chromium build, instances failed to terminate
+
+## v3.3.14-hotfix (2024/02/17)
+
+* Hotfix for Linux build - some Chrome files no longer exist
+
+## v3.3.14 (2024/02/17)
+
+* Update Chrome downloads. Thanks @opemvbs
+
+## v3.3.13 (2024/01/07)
+
+* Fix too many open files error
+
+## v3.3.12 (2023/12/15)
+
+* Fix looping challenges and invalid cookies
+
+## v3.3.11 (2023/12/11)
+
+* Update UC 3.5.4 & Selenium 4.15.2. Thanks @txtsd
+
+## v3.3.10 (2023/11/14)
+
+* Add LANG ENV - resolves issues with YGGtorrent
+
+## v3.3.9 (2023/11/13)
+
+* Fix for Docker build, capture TypeError
+
+## v3.3.8 (2023/11/13)
+
+* Fix headless=true for Chrome 117+. Thanks @NabiKAZ
+* Support running Chrome 119 from source. Thanks @koleg and @Chris7X
+* Fix "OSError: [WinError 6] The handle is invalid" on exit. Thanks @enesgorkemgenc
+
+## v3.3.7 (2023/11/05)
+
+* Bump to rebuild. Thanks @JoachimDorchies
+
+## v3.3.6 (2023/09/15)
+
+* Update checkbox selector, again
+
+## v3.3.5 (2023/09/13)
+
+* Change checkbox selector, support languages other than English
+
+## v3.3.4 (2023/09/02)
+
+* Update checkbox selector
+
+## v3.3.3 (2023/08/31)
+
+* Update undetected_chromedriver to v3.5.3
+
+## v3.3.2 (2023/08/03)
+
+* Fix URL domain in Prometheus exporter
+
+## v3.3.1 (2023/08/03)
+
+* Fix for Cloudflare verify checkbox
+* Fix HEADLESS=false in Windows binary
+* Fix Prometheus exporter for management and health endpoints
+* Remove misleading stack trace when the verify checkbox is not found
+* Revert "Update base Docker image to Debian Bookworm" #849
+* Revert "Install Chromium 115 from Debian testing" #849
+
+## v3.3.0 (2023/08/02)
+
+* Fix for new Cloudflare detection. Thanks @cedric-bour for #845
+* Add support for proxy authentication username/password. Thanks @jacobprice808	for #807
+* Implement Prometheus metrics
+* Fix Chromium Driver for Chrome / Chromium version > 114
+* Use Chromium 115 in binary packages (Windows and Linux)
+* Install Chromium 115 from Debian testing (Docker)
+* Update base Docker image to Debian Bookworm
+* Update Selenium 4.11.2
+* Update pyinstaller 5.13.0
+* Add more traces in build_package.py
+
+## v3.2.2 (2023/07/16)
+
+* Workaround for updated 'verify you are human' check
+
+## v3.2.1 (2023/06/10)
+
+* Kill dead Chrome processes in Windows
+* Fix Chrome GL erros in ASUSTOR NAS
+
+## v3.2.0 (2023/05/23)
+
+* Support "proxy" param in requests and sessions
+* Support "cookies" param in requests
+* Fix Chromium exec permissions in Linux package
+* Update Python dependencies
+
 ## v3.1.2 (2023/04/02)
 
 * Fix headless mode in macOS

@@ -1,4 +1,5 @@
 import unittest
+from typing import Optional
 
 from webtest import TestApp
 
@@ -7,7 +8,7 @@ import flaresolverr
 import utils
 
 
-def _find_obj_by_key(key: str, value: str, _list: list) -> dict | None:
+def _find_obj_by_key(key: str, value: str, _list: list) -> Optional[dict]:
     for obj in _list:
         if obj[key] == value:
             return obj
@@ -28,6 +29,8 @@ class TestFlareSolverr(unittest.TestCase):
     cloudflare_blocked_url = "https://cpasbiens3.fr/index.php?do=search&subaction=search"
 
     app = TestApp(flaresolverr.app)
+    # wait until the server is ready
+    app.get('/')
 
     def test_wrong_endpoint(self):
         res = self.app.get('/wrong', status=404)
@@ -236,7 +239,45 @@ class TestFlareSolverr(unittest.TestCase):
         self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
         self.assertEqual(utils.get_flaresolverr_version(), body.version)
 
-    # todo: test Cmd 'request.get' should return OK with 'cookies' param
+    def test_v1_endpoint_request_get_cookies_param(self):
+        res = self.app.post_json('/v1', {
+            "cmd": "request.get",
+            "url": self.google_url,
+            "cookies": [
+                {
+                    "name": "testcookie1",
+                    "value": "testvalue1"
+                },
+                {
+                    "name": "testcookie2",
+                    "value": "testvalue2"
+                }
+            ]
+        })
+        self.assertEqual(res.status_code, 200)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_OK, body.status)
+        self.assertEqual("Challenge not detected!", body.message)
+        self.assertGreater(body.startTimestamp, 10000)
+        self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
+        self.assertEqual(utils.get_flaresolverr_version(), body.version)
+
+        solution = body.solution
+        self.assertIn(self.google_url, solution.url)
+        self.assertEqual(solution.status, 200)
+        self.assertIs(len(solution.headers), 0)
+        self.assertIn("<title>Google</title>", solution.response)
+        self.assertGreater(len(solution.cookies), 1)
+        self.assertIn("Chrome/", solution.userAgent)
+
+        user_cookie1 = _find_obj_by_key("name", "testcookie1", solution.cookies)
+        self.assertIsNotNone(user_cookie1, "User cookie 1 not found")
+        self.assertEqual("testvalue1", user_cookie1["value"])
+
+        user_cookie2 = _find_obj_by_key("name", "testcookie2", solution.cookies)
+        self.assertIsNotNone(user_cookie2, "User cookie 2 not found")
+        self.assertEqual("testvalue2", user_cookie2["value"])
 
     def test_v1_endpoint_request_get_returnOnlyCookies_param(self):
         res = self.app.post_json('/v1', {
@@ -261,10 +302,124 @@ class TestFlareSolverr(unittest.TestCase):
         self.assertGreater(len(solution.cookies), 0)
         self.assertIn("Chrome/", solution.userAgent)
 
-    # todo: test Cmd 'request.get' should return OK with HTTP 'proxy' param
-    # todo: test Cmd 'request.get' should return OK with HTTP 'proxy' param with credentials
-    # todo: test Cmd 'request.get' should return OK with SOCKSv5 'proxy' param
-    # todo: test Cmd 'request.get' should fail with wrong 'proxy' param
+    def test_v1_endpoint_request_get_proxy_http_param(self):
+        """
+        To configure TinyProxy in local:
+           * sudo vim /etc/tinyproxy/tinyproxy.conf
+              * edit => LogFile "/tmp/tinyproxy.log"
+              * edit => Syslog Off
+           * sudo tinyproxy -d
+           * sudo tail -f /tmp/tinyproxy.log
+        """
+        res = self.app.post_json('/v1', {
+            "cmd": "request.get",
+            "url": self.google_url,
+            "proxy": {
+                "url": self.proxy_url
+            }
+        })
+        self.assertEqual(res.status_code, 200)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_OK, body.status)
+        self.assertEqual("Challenge not detected!", body.message)
+        self.assertGreater(body.startTimestamp, 10000)
+        self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
+        self.assertEqual(utils.get_flaresolverr_version(), body.version)
+
+        solution = body.solution
+        self.assertIn(self.google_url, solution.url)
+        self.assertEqual(solution.status, 200)
+        self.assertIs(len(solution.headers), 0)
+        self.assertIn("<title>Google</title>", solution.response)
+        self.assertGreater(len(solution.cookies), 0)
+        self.assertIn("Chrome/", solution.userAgent)
+
+    def test_v1_endpoint_request_get_proxy_http_param_with_credentials(self):
+        """
+        To configure TinyProxy in local:
+           * sudo vim /etc/tinyproxy/tinyproxy.conf
+              * edit => LogFile "/tmp/tinyproxy.log"
+              * edit => Syslog Off
+              * add => BasicAuth testuser testpass
+           * sudo tinyproxy -d
+           * sudo tail -f /tmp/tinyproxy.log
+        """
+        res = self.app.post_json('/v1', {
+            "cmd": "request.get",
+            "url": self.google_url,
+            "proxy": {
+                "url": self.proxy_url,
+                "username": "testuser",
+                "password": "testpass"
+            }
+        })
+        self.assertEqual(res.status_code, 200)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_OK, body.status)
+        self.assertEqual("Challenge not detected!", body.message)
+        self.assertGreater(body.startTimestamp, 10000)
+        self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
+        self.assertEqual(utils.get_flaresolverr_version(), body.version)
+
+        solution = body.solution
+        self.assertIn(self.google_url, solution.url)
+        self.assertEqual(solution.status, 200)
+        self.assertIs(len(solution.headers), 0)
+        self.assertIn("<title>Google</title>", solution.response)
+        self.assertGreater(len(solution.cookies), 0)
+        self.assertIn("Chrome/", solution.userAgent)
+
+    def test_v1_endpoint_request_get_proxy_socks_param(self):
+        """
+        To configure Dante in local:
+           * https://linuxhint.com/set-up-a-socks5-proxy-on-ubuntu-with-dante/
+           * sudo vim /etc/sockd.conf
+           * sudo systemctl restart sockd.service
+           * curl --socks5 socks5://127.0.0.1:1080 https://www.google.com
+        """
+        res = self.app.post_json('/v1', {
+            "cmd": "request.get",
+            "url": self.google_url,
+            "proxy": {
+                "url": self.proxy_socks_url
+            }
+        })
+        self.assertEqual(res.status_code, 200)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_OK, body.status)
+        self.assertEqual("Challenge not detected!", body.message)
+        self.assertGreater(body.startTimestamp, 10000)
+        self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
+        self.assertEqual(utils.get_flaresolverr_version(), body.version)
+
+        solution = body.solution
+        self.assertIn(self.google_url, solution.url)
+        self.assertEqual(solution.status, 200)
+        self.assertIs(len(solution.headers), 0)
+        self.assertIn("<title>Google</title>", solution.response)
+        self.assertGreater(len(solution.cookies), 0)
+        self.assertIn("Chrome/", solution.userAgent)
+
+    def test_v1_endpoint_request_get_proxy_wrong_param(self):
+        res = self.app.post_json('/v1', {
+            "cmd": "request.get",
+            "url": self.google_url,
+            "proxy": {
+                "url": "http://127.0.0.1:43210"
+            }
+        }, status=500)
+        self.assertEqual(res.status_code, 500)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_ERROR, body.status)
+        self.assertIn("Error: Error solving the challenge. Message: unknown error: net::ERR_PROXY_CONNECTION_FAILED",
+                      body.message)
+        self.assertGreater(body.startTimestamp, 10000)
+        self.assertGreaterEqual(body.endTimestamp, body.startTimestamp)
+        self.assertEqual(utils.get_flaresolverr_version(), body.version)
 
     def test_v1_endpoint_request_get_fail_timeout(self):
         res = self.app.post_json('/v1', {
@@ -400,6 +555,20 @@ class TestFlareSolverr(unittest.TestCase):
         self.assertEqual(STATUS_OK, body.status)
         self.assertEqual("Session created successfully.", body.message)
         self.assertEqual(body.session, "test_create_session")
+
+    def test_v1_endpoint_sessions_create_with_proxy(self):
+        res = self.app.post_json('/v1', {
+            "cmd": "sessions.create",
+            "proxy": {
+                "url": self.proxy_url
+            }
+        })
+        self.assertEqual(res.status_code, 200)
+
+        body = V1ResponseBase(res.json)
+        self.assertEqual(STATUS_OK, body.status)
+        self.assertEqual("Session created successfully.", body.message)
+        self.assertIsNotNone(body.session)
 
     def test_v1_endpoint_sessions_list(self):
         self.app.post_json('/v1', {

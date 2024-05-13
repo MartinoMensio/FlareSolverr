@@ -25,8 +25,8 @@ def clean_files():
 
 def download_chromium():
     # https://commondatastorage.googleapis.com/chromium-browser-snapshots/index.html?prefix=Linux_x64/
-    revision = "1090006" if os.name == 'nt' else '1090007'
-    arch = 'Win' if os.name == 'nt' else 'Linux_x64'
+    revision = "1260008" if os.name == 'nt' else '1260015'
+    arch = 'Win_x64' if os.name == 'nt' else 'Linux_x64'
     dl_file = 'chrome-win' if os.name == 'nt' else 'chrome-linux'
     dl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, 'dist_chrome')
     dl_path_folder = os.path.join(dl_path, dl_file)
@@ -50,17 +50,32 @@ def download_chromium():
     with zipfile.ZipFile(dl_path_zip, 'r') as zip_ref:
         zip_ref.extractall(dl_path)
     os.remove(dl_path_zip)
-    shutil.move(dl_path_folder, os.path.join(dl_path, "chrome"))
+
+    chrome_path = os.path.join(dl_path, "chrome")
+    shutil.move(dl_path_folder, chrome_path)
+    print("Extracted in: " + chrome_path)
+
+    if os.name != 'nt':
+        # Give executable permissions for *nix
+        # file * | grep executable | cut -d: -f1
+        print("Giving executable permissions...")
+        execs = ['chrome', 'chrome_crashpad_handler', 'chrome_sandbox', 'chrome-wrapper', 'xdg-mime', 'xdg-settings']
+        for exec_file in execs:
+            exec_path = os.path.join(chrome_path, exec_file)
+            os.chmod(exec_path, 0o755)
 
 
 def run_pyinstaller():
     sep = ';' if os.name == 'nt' else ':'
-    subprocess.check_call([sys.executable, "-m", "PyInstaller",
-                           "--icon", "resources/flaresolverr_logo.ico",
-                           "--add-data", f"package.json{sep}.",
-                           "--add-data", f"{os.path.join('dist_chrome', 'chrome')}{sep}chrome",
-                           os.path.join("src", "flaresolverr.py")],
-                          cwd=os.pardir)
+    result = subprocess.run([sys.executable, "-m", "PyInstaller",
+                             "--icon", "resources/flaresolverr_logo.ico",
+                             "--add-data", f"package.json{sep}.",
+                             "--add-data", f"{os.path.join('dist_chrome', 'chrome')}{sep}chrome",
+                             os.path.join("src", "flaresolverr.py")],
+                            cwd=os.pardir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode != 0:
+        print(result.stderr.decode('utf-8'))
+        raise Exception("Error running pyInstaller")
 
 
 def compress_package():
