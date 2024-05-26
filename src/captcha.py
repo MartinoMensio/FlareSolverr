@@ -6,6 +6,8 @@ import time
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 def get_solver(css_selector):
@@ -305,7 +307,15 @@ def solver_cat_in_box(driver, css_selector):
     actions.click_and_hold()
     box = driver.find_element(By.CSS_SELECTOR, "img#box")
     actions.move_to_element(box)
-    # actions.pause(0.2)
+    # make the box move away, let's catch the next time
+    actions.pause(2)
+    actions.perform()
+    print("waiting for box to become green")
+    # now wait that the box becomes green
+    actions = ActionChains(driver)
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "div.success"))
+    )
     actions.release()
     actions.perform()
     print("cat released in box")
