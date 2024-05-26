@@ -239,6 +239,7 @@ def solver_pizza(driver, css_selector):
             time.sleep(1)
     driver.find_element(By.CSS_SELECTOR, "button#captcha-submit-button").click()
     print("clicked submit pizza button")
+    time.sleep(2)
 
 
 def _identify_pizza(images_src):
@@ -319,6 +320,7 @@ def solver_cat_in_box(driver, css_selector):
     actions.release()
     actions.perform()
     print("cat released in box")
+    time.sleep(2)
 
 
 solvers_by_css_selector = {
