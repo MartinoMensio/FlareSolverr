@@ -2,22 +2,26 @@ from selenium.webdriver.common.by import By
 import base64
 from PIL import Image
 import numpy as np
+import traceback
+import time
 
 
 def get_solver(css_selector):
     return solvers_by_css_selector.get(css_selector)
 
+
 def solver_rotated_image(driver, css_selector):
-    print('challenge rotated_image initiated')
+    print("challenge rotated_image initiated")
     images = driver.find_elements(By.CSS_SELECTOR, "img.csnl_cp_img")
     assert len(images) == 9
     images_src = [image.get_attribute("src") for image in images]
     index = _identify_rotated(images_src)
-    print('challenge rotated_image solved', index)
-    # TODO: click on the image
+    print("challenge rotated_image solved", index)
+    # click on the image
     images[index].click()
     driver.find_element(By.CSS_SELECTOR, "button#submit_csnl_cp").click()
-    print('clicked submit_csnl_cp')
+    print("clicked submit_csnl_cp")
+
 
 def _identify_rotated(images_src):
     lower_rows = []
@@ -26,101 +30,273 @@ def _identify_rotated(images_src):
     right_columns = []
     for i, img in enumerate(images_src):
         if img.startswith("data:image/png;base64,"):
-            img = img[len("data:image/png;base64,"):]
+            img = img[len("data:image/png;base64,") :]
         img = base64.b64decode(img)
         with open(f"/tmp/image_{i}.png", "wb") as f:
             f.write(img)
         # image = Image.fromarray(img)
         image = Image.open(f"/tmp/image_{i}.png")
-        size = image.size # w,h
-        lower_rows.append(np.matrix([image.getpixel((x, size[1] - 1)) for x in range(size[0])]))
+        size = image.size  # w,h
+        lower_rows.append(
+            np.matrix([image.getpixel((x, size[1] - 1)) for x in range(size[0])])
+        )
         upper_rows.append(np.matrix([image.getpixel((x, 0)) for x in range(size[0])]))
         left_columns.append(np.matrix([image.getpixel((0, y)) for y in range(size[1])]))
-        right_columns.append(np.matrix([image.getpixel((size[0] - 1, y)) for y in range(size[1])]))
+        right_columns.append(
+            np.matrix([image.getpixel((size[0] - 1, y)) for y in range(size[1])])
+        )
     # only one can be rotated
     cumulative_differences = []
     r = lambda a: a[::-1]
     for i in range(9):
         if i == 0:
-            diff_pairs_rows = [( r(upper_rows[0]), upper_rows[3] ), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [( r(left_columns[0]), left_columns[1] ), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (r(upper_rows[0]), upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (r(left_columns[0]), left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 1:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               ( r(upper_rows[1]), upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], r(right_columns[1]) ), (r (left_columns[1]), left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (r(upper_rows[1]), upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], r(right_columns[1])),
+                (r(left_columns[1]), left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 2:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               ( r(upper_rows[2]), upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1] ), (right_columns[1], r(right_columns[2])),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (r(upper_rows[2]), upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], r(right_columns[2])),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 3:
-            diff_pairs_rows = [(lower_rows[0], r(lower_rows[3]) ), (r(upper_rows[3]), upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1] ), (right_columns[1], left_columns[2]),
-                                  (r(left_columns[3]), left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], r(lower_rows[3])),
+                (r(upper_rows[3]), upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (r(left_columns[3]), left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 4:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], r(lower_rows[4])), (r(upper_rows[4]), upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1] ), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], r(right_columns[4])), (r(left_columns[4]), left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], r(lower_rows[4])),
+                (r(upper_rows[4]), upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], r(right_columns[4])),
+                (r(left_columns[4]), left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 5:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], r(lower_rows[5])), (r(upper_rows[5]), upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1]), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], r(right_columns[5])),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], r(lower_rows[5])),
+                (r(upper_rows[5]), upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], r(right_columns[5])),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 6:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], r(lower_rows[6])),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1]), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (r(left_columns[6]), left_columns[7]), (right_columns[7], left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], r(lower_rows[6])),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (r(left_columns[6]), left_columns[7]),
+                (right_columns[7], left_columns[8]),
+            ]
         elif i == 7:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], r(lower_rows[7])), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], upper_rows[8])]
-            diff_pairs_columns = [(right_columns[0], left_columns[1]), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], r(right_columns[7])), (r(left_columns[7]), left_columns[8])]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], r(lower_rows[7])),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], upper_rows[8]),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], r(right_columns[7])),
+                (r(left_columns[7]), left_columns[8]),
+            ]
         elif i == 8:
-            diff_pairs_rows = [(lower_rows[0], upper_rows[3]), (lower_rows[3], upper_rows[6]),
-                               (lower_rows[1], upper_rows[4]), (lower_rows[4], upper_rows[7]), 
-                               (lower_rows[2], upper_rows[5]), (lower_rows[5], r(lower_rows[8]))]
-            diff_pairs_columns = [(right_columns[0], left_columns[1]), (right_columns[1], left_columns[2]),
-                                  (right_columns[3], left_columns[4]), (right_columns[4], left_columns[5]),
-                                  (right_columns[6], left_columns[7]), (right_columns[7], r(right_columns[8]))]
+            diff_pairs_rows = [
+                (lower_rows[0], upper_rows[3]),
+                (lower_rows[3], upper_rows[6]),
+                (lower_rows[1], upper_rows[4]),
+                (lower_rows[4], upper_rows[7]),
+                (lower_rows[2], upper_rows[5]),
+                (lower_rows[5], r(lower_rows[8])),
+            ]
+            diff_pairs_columns = [
+                (right_columns[0], left_columns[1]),
+                (right_columns[1], left_columns[2]),
+                (right_columns[3], left_columns[4]),
+                (right_columns[4], left_columns[5]),
+                (right_columns[6], left_columns[7]),
+                (right_columns[7], r(right_columns[8])),
+            ]
         # each row has shape (173, 4)
-        diff_cum = np.array([0,0,0,0])
+        diff_cum = np.array([0, 0, 0, 0])
         for row in diff_pairs_rows:
             diff_cum += np.sum(np.abs(row[0] - row[1]))
         for column in diff_pairs_columns:
             diff_cum += np.sum(np.abs(column[0] - column[1]))
         total = np.sum(diff_cum)
         cumulative_differences.append(total)
-    print('cumulative differences', cumulative_differences)
+    print("cumulative differences", cumulative_differences)
     result = cumulative_differences.index(min(cumulative_differences))
-    print('index minimizing diff', result)
+    print("index minimizing diff", result)
     return result
 
 
+def solver_pizza(driver, css_selector):
+    print("challenge pizza initiated")
+    images = driver.find_elements(By.CSS_SELECTOR, "div#captcha-tile-container img")
+    assert len(images) == 4
+    images_src = [image.get_attribute("src") for image in images]
+    try:
+        solution = _identify_pizza(images_src)
+    except Exception as e:
+        print("challenge pizza failed to identify solution", e)
+        print(traceback.format_exc())
+        return
+    print("challenge pizza identified solution", solution)
+    # click on the images
+    for i, rotation in enumerate(solution):
+        for _ in range(rotation):
+            images[i].click()
+            time.sleep(1)
+    driver.find_element(By.CSS_SELECTOR, "button#captcha-submit-button").click()
+    print("clicked submit pizza button")
+
+
+def _identify_pizza(images_src):
+    # borders is list of list of 4 elements:
+    # [top, right, bottom, left] for each image
+    borders = []
+    for i, img in enumerate(images_src):
+        if img.startswith("data:image/png;base64,"):
+            img = img[len("data:image/png;base64,") :]
+        img = base64.b64decode(img)
+        with open(f"/tmp/image_{i}.png", "wb") as f:
+            f.write(img)
+        # image = Image.fromarray(img)
+        image = Image.open(f"/tmp/image_{i}.png")
+        size = image.size  # w,h
+        # extract pixels
+        top = np.matrix([image.getpixel((x, 0)) for x in range(size[0])])
+        bottom = np.matrix([image.getpixel((x, size[1] - 1)) for x in range(size[0])])
+        # reverse bottom to keep pixels in clockwise order
+        bottom = bottom[::-1]
+        left = np.matrix([image.getpixel((0, y)) for y in range(size[1])])
+        right = np.matrix([image.getpixel((size[0] - 1, y)) for y in range(size[1])])
+        # also reverse right
+        right = right[::-1]
+        borders.append([top, right, bottom, left])
+    # now identify rotations that minimize differences
+    best_rotations = [0, 0, 0, 0]
+    min_diff = float("inf")
+    for rot_first in range(4):
+        for rot_second in range(4):
+            for rot_third in range(4):
+                for rot_fourth in range(4):
+                    current_borders = [
+                        np.roll(borders[0], rot_first),
+                        np.roll(borders[1], rot_second),
+                        np.roll(borders[2], rot_third),
+                        np.roll(borders[3], rot_fourth),
+                    ]
+                    diff = _get_diff_value(current_borders)
+                    if diff < min_diff:
+                        min_diff = diff
+                        best_rotations = [rot_first, rot_second, rot_third, rot_fourth]
+                        print("new best rotations", best_rotations, min_diff)
+    return best_rotations
+
+
+def _get_diff_value(current_borders):
+    diff = 0
+    # 1st left with 2nd right (reversed)
+    diff += np.sum(np.abs(current_borders[0][3] - current_borders[1][1][::-1]))
+    # 3rd left with 4nd right (reversed)
+    diff += np.sum(np.abs(current_borders[2][3] - current_borders[3][1][::-1]))
+    # 1st bottom with 3th top (reversed)
+    diff += np.sum(np.abs(current_borders[0][2] - current_borders[2][0][::-1]))
+    # 2rd bottom with 4th top (reversed)
+    diff += np.sum(np.abs(current_borders[1][2] - current_borders[3][0][::-1]))
+    return diff
+
 
 solvers_by_css_selector = {
-    'div#_csnl_cp': solver_rotated_image,
+    "div#_csnl_cp": solver_rotated_image,
+    "div#rotate-captcha": solver_pizza,
 }
 
 test_imgs_rotated = [
@@ -135,8 +311,10 @@ test_imgs_rotated = [
     "data:image/png;base64,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",
 ]
 
+
 def main():
     _identify_rotated(test_imgs_rotated)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
