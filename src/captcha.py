@@ -1,9 +1,11 @@
-from selenium.webdriver.common.by import By
 import base64
 from PIL import Image
 import numpy as np
 import traceback
 import time
+
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
 
 
 def get_solver(css_selector):
@@ -294,9 +296,25 @@ def _get_diff_value(current_borders):
     return diff
 
 
+def solver_cat_in_box(driver, css_selector):
+    print("challenge cat_in_box initiated")
+    cat = driver.find_element(By.CSS_SELECTOR, "img#cat")
+    # drag the cat in the box
+    actions = ActionChains(driver)
+    actions.move_to_element(cat)
+    actions.click_and_hold()
+    box = driver.find_element(By.CSS_SELECTOR, "img#box")
+    actions.move_to_element(box)
+    # actions.pause(0.2)
+    actions.release()
+    actions.perform()
+    print("cat released in box")
+
+
 solvers_by_css_selector = {
     "div#_csnl_cp": solver_rotated_image,
     "div#rotate-captcha": solver_pizza,
+    "div#dragdrop-captcha": solver_cat_in_box,
 }
 
 test_imgs_rotated = [
